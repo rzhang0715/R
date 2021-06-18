@@ -1,0 +1,87 @@
+---
+title: "Data Analysis Workflow"
+author: "RZ"
+date: "6/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load require libraries
+```{r}
+library(readr)
+library(dplyr)
+```
+
+Check the data
+```{r}
+setwd("~/Downloads/Dataquest/R")
+data <- read.csv('book_reviews.csv')
+print(dim(data))
+print(nrow(data))
+print(ncol(data))
+
+#Coloumn names
+print(colnames(data))
+
+# Types of each columns
+col_type = c()
+for (i in colnames(data)){
+  col_type <- c(col_type, typeof(i))
+}
+print(col_type)
+
+# Unique value in each columns 
+for (i in colnames(data)){
+  print(i)
+  print(unique(data[[i]]))
+}
+```
+
+Data Cleaning
+```{r}
+#Check the data with missing and remove missing data
+data_nona <- data %>% filter(!is.na(review))
+
+#Show the dimension of the data set
+dim(data_nona)
+```
+
+Deal with the inconsistent data
+```{r}
+data_ab <- data_nona %>% mutate(
+  state = case_when(
+    state =='California' ~ 'CA',
+    state == 'New York' ~ 'NY',
+    state == 'Texas' ~ 'TX',
+    state == 'Florida' ~ 'FL',
+    TRUE ~ state #ignore already abbreviation
+  )
+)
+```
+
+Create a new column with numerical rate
+```{r}
+data_ab <- data_ab %>% mutate(
+  review_num = case_when(
+  review == 'Poor' ~ 1,
+  review == 'Fair' ~ 2,
+  review == 'Good' ~ 3,
+  review == 'Great' ~ 4,
+  review == 'Excellent' ~ 5
+  ),
+  is_high_review = if_else(review_num >=4, TRUE, FALSE)
+)
+```
+
+Analyze the data
+```{r}
+data_gp <- data_ab %>% group_by(book) %>% summarise(
+  sum_1 = sum(price),
+  cou_1 = n() #Number of observations in current group
+)
+head(data_gp)
+```
+
