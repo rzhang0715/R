@@ -1,0 +1,83 @@
+---
+title: "NYC Schools Perceptions"
+author: "RZ"
+date: "6/29/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Import the necessary files and packages
+```{r}
+library(tidyverse)
+library(readr)
+library(dplyr)
+library(purrr)
+library(ggplot2)
+library(tidyr)
+# All data are from 2011 NYC online data
+combined <- read_csv('combined.csv')
+survey <- read_tsv('2011 data files online/masterfile11_gened_final.txt')
+survey_75 <- read_tsv('2011 data files online/masterfile11_d75_final.txt')
+
+```
+
+Filter the data frame to remove unnecessary columns
+```{r}
+survey_select <- survey %>% select(dbn:aca_tot_11) %>% filter(schooltype=='High School')
+survey_75_select <- survey_75 %>% select(dbn:aca_tot_11)
+```
+
+Combine the survey data with selected conditions above
+```{r}
+survey_total <- bind_rows(survey_select, survey_75_select) 
+survey_total <- survey_total %>% rename(DBN=dbn)
+combined_survey <- combined %>% left_join(survey_total, by='DBN')
+```
+
+Find the correlation and visualize the correlation
+```{r}
+# Find the correlation matrix
+cor_mat <- combined_survey %>% select(avg_sat_score, saf_p_11:aca_tot_11) %>% cor(use = "pairwise.complete.obs")
+# Covert the correlation matrix to tibble which as variable as row names
+cor_tib <- cor_mat %>%as_tibble(rownames = "variable")
+# Find strong correlations
+strong_cors <- cor_tib %>%select(variable, avg_sat_score) %>%filter(avg_sat_score > 0.25 | avg_sat_score < -0.25)  
+```
+
+Visualize the avg_sat_score to other strong correlation variables
+```{r}
+create_scatter <- function(x, y) {ggplot(data = combined_survey) + aes_string(x = x, y = y) + geom_point(alpha = 0.3) + theme(panel.background = element_rect(fill = "white"))}
+
+x_var <- strong_cors$variable[2:5]
+y_var <- "avg_sat_score"
+  
+map2(x_var, y_var, create_scatter)
+```
+
+Reshape the data so that you can investigate differences in student, parent, and teacher responses to survey questions.
+```{r}
+combined_survey_gather <- combined_survey %>%
+  pivot_longer(cols = saf_p_11:aca_tot_11,
+               names_to = "survey_question",
+               values_to = "score")
+# Extract values from the string
+combined_survey_gather <- combined_survey_gather %>%
+  mutate(response_type = str_sub(survey_question, 4, 6)) %>%   
+  mutate(question = str_sub(survey_question, 1, 3))
+
+combined_survey_gather <- combined_survey_gather %>%
+  mutate(response_type = ifelse(response_type  == "_p_", "parent", 
+                                ifelse(response_type == "_t_", "teacher",
+                                       ifelse(response_type == "_s_", "student", 
+                                              ifelse(response_type == "_to", "total", "NA")))))
+
+# Make a box plot to see if there appear to be differences in how the three groups of responds (parents, students, and teachers) answered the four questions. 
+combined_survey_gather %>%
+  filter(response_type != "total") %>%
+  ggplot(aes(x = question, y = score, fill = response_type)) +
+  geom_boxplot()
+```
+
